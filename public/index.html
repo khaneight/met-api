@@ -1,0 +1,482 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Met Recent Works</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f7f5f0;
+    --surface: #ffffff;
+    --text: #1d1b18;
+    --muted: #6b665d;
+    --border: #e2ddd2;
+    --accent: #b0232a;
+    --accent-text: #ffffff;
+    --code-bg: #f1eee7;
+    --error-bg: #fdecec;
+    --error-border: #f0b4b4;
+    --radius: 10px;
+    --shadow: 0 1px 2px rgb(0 0 0 / 0.04), 0 2px 8px rgb(0 0 0 / 0.04);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #151412;
+      --surface: #1f1d1a;
+      --text: #ece8e1;
+      --muted: #a39d92;
+      --border: #34302a;
+      --accent: #e0555c;
+      --accent-text: #1a0a0b;
+      --code-bg: #171613;
+      --error-bg: #3a1c1d;
+      --error-border: #6e3033;
+      --shadow: none;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  main { max-width: 880px; margin: 0 auto; padding: 32px 16px 64px; }
+
+  header h1 {
+    margin: 0;
+    font: 600 28px/1.2 Georgia, "Times New Roman", serif;
+    letter-spacing: -0.01em;
+  }
+  header p { margin: 6px 0 24px; color: var(--muted); }
+
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* Search form */
+  form {
+    display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end;
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 16px; box-shadow: var(--shadow);
+  }
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .field.grow { flex: 1 1 220px; }
+  .field label { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+  input[type="search"], select {
+    font: inherit; color: inherit; background: var(--bg);
+    border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; min-height: 40px;
+  }
+  .checkbox { display: flex; align-items: center; gap: 8px; min-height: 40px; cursor: pointer; }
+  .checkbox input { width: 16px; height: 16px; accent-color: var(--accent); }
+  button {
+    font: inherit; font-weight: 600; cursor: pointer; min-height: 40px; padding: 8px 16px;
+    border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--text);
+  }
+  button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  /* Status line */
+  .status {
+    display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px;
+    margin: 20px 2px 12px; color: var(--muted); min-height: 24px;
+  }
+  .status .timing { font-variant-numeric: tabular-nums; }
+  .spinner {
+    display: inline-block; width: 14px; height: 14px; margin-right: 8px; vertical-align: -2px;
+    border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 3s; } }
+
+  /* Results */
+  .results { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+  .card {
+    display: grid; grid-template-columns: 120px 1fr; gap: 16px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 14px; box-shadow: var(--shadow);
+  }
+  .thumb {
+    width: 120px; height: 120px; border-radius: 6px; overflow: hidden; background: var(--code-bg);
+    display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 12px;
+  }
+  .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .card-body { min-width: 0; }
+  .card-head { display: flex; gap: 10px; align-items: baseline; }
+  .rank {
+    flex: none; font-weight: 700; color: var(--accent); font-variant-numeric: tabular-nums;
+  }
+  .card h2 { margin: 0; font: 600 17px/1.3 Georgia, "Times New Roman", serif; overflow-wrap: anywhere; }
+  .artist { margin: 2px 0 8px; color: var(--muted); }
+  .meta { display: grid; grid-template-columns: max-content 1fr; gap: 2px 12px; margin: 0; font-size: 14px; }
+  .meta dt { color: var(--muted); }
+  .meta dd { margin: 0; overflow-wrap: anywhere; }
+  .card-actions { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; margin-top: 10px; font-size: 14px; }
+  .card-actions a { color: var(--accent); }
+  details summary { cursor: pointer; color: var(--muted); }
+  details pre {
+    margin: 8px 0 0; padding: 10px; background: var(--code-bg); border-radius: 6px;
+    font-size: 12px; overflow-x: auto; max-width: 100%;
+  }
+  .json-wrap { grid-column: 1 / -1; }
+
+  .skeleton .thumb, .skeleton .line {
+    background: linear-gradient(90deg, var(--code-bg), var(--border), var(--code-bg));
+    background-size: 200% 100%; animation: shimmer 1.4s ease-in-out infinite;
+  }
+  .skeleton .line { height: 14px; border-radius: 4px; margin: 8px 0; }
+  @keyframes shimmer { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+
+  .message {
+    background: var(--surface); border: 1px dashed var(--border); border-radius: var(--radius);
+    padding: 32px 16px; text-align: center; color: var(--muted);
+  }
+  .error {
+    background: var(--error-bg); border: 1px solid var(--error-border); border-radius: var(--radius);
+    padding: 14px 16px;
+  }
+  .error strong { display: block; margin-bottom: 4px; }
+  .error code { font-size: 12px; }
+  .error ul { margin: 6px 0 0; padding-left: 20px; }
+
+  /* Pagination */
+  .pager { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 20px; }
+  .pager .page { color: var(--muted); font-variant-numeric: tabular-nums; }
+
+  @media (max-width: 520px) {
+    .card { grid-template-columns: 80px 1fr; gap: 12px; }
+    .thumb { width: 80px; height: 80px; }
+    form button.primary { flex: 1 1 100%; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Met Recent Works</h1>
+    <p>The most recent works in The Met collection for a search term, by <code>objectEndDate</code>.</p>
+  </header>
+
+  <form id="search-form" role="search">
+    <div class="field grow">
+      <label for="q">Search term</label>
+      <input id="q" name="q" type="search" value="bread" maxlength="200" required autocomplete="off" />
+    </div>
+    <div class="field">
+      <label for="limit">Page size</label>
+      <select id="limit" name="limit">
+        <option value="5">5</option>
+        <option value="10">10</option>
+        <option value="20">20</option>
+      </select>
+    </div>
+    <!-- The Met's hasImages flag means "pictured on metmuseum.org"; the API only
+         serves image files for public-domain works, so recent works rarely have one. -->
+    <label class="checkbox" title="Pictured on metmuseum.org. The API only serves images of public-domain works, so most recent works still show no image here.">
+      <input id="hasImages" name="hasImages" type="checkbox" />
+      Pictured on metmuseum.org
+    </label>
+    <button class="primary" type="submit">Search</button>
+  </form>
+
+  <div class="status" id="status" role="status" aria-live="polite"></div>
+  <div id="results"></div>
+
+  <nav class="pager" id="pager" aria-label="Pagination" hidden>
+    <button type="button" id="prev">← Previous</button>
+    <span class="page" id="page-indicator"></span>
+    <button type="button" id="next">Next →</button>
+  </nav>
+</main>
+
+<script>
+  'use strict';
+
+  const DEFAULTS = { q: 'bread', limit: 5, offset: 0, hasImages: false };
+  const PAGE_SIZES = [5, 10, 20];
+
+  const els = {
+    form: document.getElementById('search-form'),
+    q: document.getElementById('q'),
+    limit: document.getElementById('limit'),
+    hasImages: document.getElementById('hasImages'),
+    status: document.getElementById('status'),
+    results: document.getElementById('results'),
+    pager: document.getElementById('pager'),
+    prev: document.getElementById('prev'),
+    next: document.getElementById('next'),
+    pageIndicator: document.getElementById('page-indicator'),
+  };
+
+  let currentState = { ...DEFAULTS };
+  const MAX_OFFSET = 10_000;
+  let lastResponse = null;
+  let inFlight = null; // AbortController for the latest request
+
+  // ---- URL <-> state ------------------------------------------------------
+
+  function readStateFromUrl() {
+    const params = new URLSearchParams(location.search);
+    const limit = Number(params.get('limit'));
+    const offset = Number(params.get('offset'));
+    return {
+      q: (params.get('q') || DEFAULTS.q).trim() || DEFAULTS.q,
+      limit: PAGE_SIZES.includes(limit) ? limit : DEFAULTS.limit,
+      offset: Number.isInteger(offset) && offset > 0 ? offset : 0,
+      hasImages: params.get('hasImages') === 'true',
+    };
+  }
+
+  function toQueryString(state) {
+    const params = new URLSearchParams({ q: state.q, limit: String(state.limit), offset: String(state.offset) });
+    if (state.hasImages) params.set('hasImages', 'true');
+    return params.toString();
+  }
+
+  function syncFormToState(state) {
+    els.q.value = state.q;
+    els.limit.value = String(state.limit);
+    els.hasImages.checked = state.hasImages;
+  }
+
+  // ---- Data loading -------------------------------------------------------
+
+  /**
+   * Loads a page and renders it. `historyMode` is 'push' for user navigation,
+   * 'replace' for the initial load, or 'none' when restoring from back/forward.
+   */
+  async function load(state, historyMode) {
+    currentState = state;
+    if (historyMode === 'push') history.pushState(state, '', '?' + toQueryString(state));
+    if (historyMode === 'replace') history.replaceState(state, '', '?' + toQueryString(state));
+
+    // Cancel any older request so a slow response can't overwrite a newer one.
+    inFlight?.abort();
+    const controller = new AbortController();
+    inFlight = controller;
+
+    renderLoading(state);
+    const startedAt = performance.now();
+    try {
+      const res = await fetch('/works/recent?' + toQueryString(state), { signal: controller.signal });
+      const body = await res.json().catch(() => null);
+      const elapsedMs = Math.round(performance.now() - startedAt);
+      if (controller !== inFlight) return;
+
+      if (!res.ok) {
+        renderError(res, body, elapsedMs);
+      } else {
+        lastResponse = body;
+        renderResults(body, elapsedMs);
+      }
+    } catch (err) {
+      if (err.name === 'AbortError') return;
+      renderError(null, null, Math.round(performance.now() - startedAt), err);
+    } finally {
+      if (controller === inFlight) {
+        inFlight = null;
+        setControlsDisabled(false);
+      }
+    }
+  }
+
+  // ---- Rendering ----------------------------------------------------------
+
+  function el(tag, props = {}, children = []) {
+    const node = document.createElement(tag);
+    for (const [key, value] of Object.entries(props)) {
+      if (key === 'text') node.textContent = value;
+      else if (key === 'className') node.className = value;
+      else node.setAttribute(key, value);
+    }
+    for (const child of [].concat(children)) {
+      if (child != null) node.append(child);
+    }
+    return node;
+  }
+
+  function setControlsDisabled(disabled) {
+    for (const control of [els.q, els.limit, els.hasImages, els.form.querySelector('button'), els.prev, els.next]) {
+      control.disabled = disabled;
+    }
+    if (!disabled) updatePagerButtons();
+  }
+
+  function setStatus(main, timing) {
+    const children = [el('span', {}, main)];
+    if (timing) children.push(el('span', { className: 'timing', text: timing }));
+    els.status.replaceChildren(...children);
+  }
+
+  function renderLoading(state) {
+    setControlsDisabled(true);
+    els.results.setAttribute('aria-busy', 'true');
+    setStatus([el('span', { className: 'spinner', 'aria-hidden': 'true' }), `Querying the Met for “${state.q}”…`]);
+
+    const skeletons = Array.from({ length: Math.min(state.limit, 5) }, () =>
+      el('li', { className: 'card skeleton', 'aria-hidden': 'true' }, [
+        el('div', { className: 'thumb' }),
+        el('div', {}, [
+          el('div', { className: 'line', style: 'width: 60%' }),
+          el('div', { className: 'line', style: 'width: 35%' }),
+          el('div', { className: 'line', style: 'width: 80%' }),
+        ]),
+      ]),
+    );
+    els.results.replaceChildren(el('ul', { className: 'results' }, skeletons));
+  }
+
+  function renderResults(data, elapsedMs) {
+    els.results.removeAttribute('aria-busy');
+    const timing = `${elapsedMs.toLocaleString()} ms`;
+
+    if (data.works.length === 0) {
+      const summary = data.total === 0
+        ? `No matches for “${data.query}”`
+        : `No works on this page (${data.total.toLocaleString()} matches for “${data.query}”)`;
+      setStatus(summary, timing);
+      els.results.replaceChildren(el('div', { className: 'message', text: 'No works found.' }));
+      renderPager(data);
+      return;
+    }
+
+    const first = data.offset + 1;
+    const last = data.offset + data.works.length;
+    setStatus(
+      `Showing ranks ${first.toLocaleString()}–${last.toLocaleString()} of ${data.total.toLocaleString()} matches for “${data.query}”`,
+      timing,
+    );
+    const cards = data.works.map((work, i) => renderWork(work, data.offset + i + 1));
+    els.results.replaceChildren(el('ul', { className: 'results' }, cards));
+    renderPager(data);
+  }
+
+  function renderWork(work, rank) {
+    const meta = el('dl', { className: 'meta' });
+    const rows = [
+      ['Date', work.date || '—'],
+      ['End year', String(work.objectEndDate)],
+      ['Type', work.objectName],
+      ['Medium', work.medium],
+      ['Culture', work.culture],
+      ['Department', work.department],
+    ];
+    for (const [label, value] of rows) {
+      if (value) meta.append(el('dt', { text: label }), el('dd', { text: value }));
+    }
+
+    const json = el('details', { className: 'json-wrap' }, [
+      el('summary', { text: 'Raw object data' }),
+      el('pre', {}, el('code', { text: JSON.stringify(work, null, 2) })),
+    ]);
+
+    return el('li', { className: 'card' }, [
+      renderThumb(work),
+      el('div', { className: 'card-body' }, [
+        el('div', { className: 'card-head' }, [
+          el('span', { className: 'rank', text: `#${rank}` }),
+          el('h2', { text: work.title || 'Untitled' }),
+        ]),
+        el('p', { className: 'artist', text: work.artist || 'Unknown artist' }),
+        meta,
+        el('div', { className: 'card-actions' }, [
+          el('a', { href: work.url, target: '_blank', rel: 'noopener noreferrer', text: 'View at The Met ↗' }),
+        ]),
+      ]),
+      json,
+    ]);
+  }
+
+  function renderThumb(work) {
+    const src = work.thumbnailUrl || work.imageUrl;
+    // The API only serves Open Access (public-domain) images, so most modern works have none.
+    const placeholder = () => el('span', { text: 'No public image', title: 'The Met only shares images of public-domain works' });
+    if (!src) return el('div', { className: 'thumb' }, placeholder());
+
+    const img = el('img', { src, alt: work.title || 'Artwork image', loading: 'lazy', decoding: 'async' });
+    const thumb = el('div', { className: 'thumb' }, img);
+    img.addEventListener('error', () => thumb.replaceChildren(placeholder()), { once: true });
+    return thumb;
+  }
+
+  function renderError(res, body, elapsedMs, networkError) {
+    els.results.removeAttribute('aria-busy');
+    const error = body?.error;
+    const box = el('div', { className: 'error', role: 'alert' });
+
+    if (networkError) {
+      box.append(el('strong', { text: 'Could not reach the server' }), el('span', { text: networkError.message }));
+    } else if (error) {
+      box.append(el('strong', { text: `${res.status} · ${error.code}` }), el('span', { text: error.message }));
+      if (res.status === 503) {
+        const retryAfter = res.headers.get('retry-after');
+        if (retryAfter) box.append(el('p', { text: `The Met is rate limiting us. Try again in ${retryAfter}s.` }));
+      }
+      if (error.details && typeof error.details === 'object') {
+        const list = el('ul');
+        for (const [field, messages] of Object.entries(error.details)) {
+          list.append(el('li', { text: `${field}: ${[].concat(messages).join(', ')}` }));
+        }
+        box.append(list);
+      }
+      if (error.requestId) box.append(el('p', {}, [el('small', { text: 'Request ID: ' }), el('code', { text: error.requestId })]));
+    } else {
+      box.append(el('strong', { text: `Unexpected response (${res.status})` }));
+    }
+
+    setStatus('Something went wrong', `${elapsedMs.toLocaleString()} ms`);
+    els.results.replaceChildren(box);
+    lastResponse = null;
+    els.pager.hidden = true;
+  }
+
+  function renderPager(data) {
+    const page = Math.floor(data.offset / data.limit) + 1;
+    // Mirrors the API's MAX_OFFSET: pages starting beyond it can't be requested.
+    const reachable = Math.min(data.total, MAX_OFFSET + data.limit);
+    const pages = Math.max(1, Math.ceil(reachable / data.limit));
+    els.pageIndicator.textContent = `Page ${page.toLocaleString()} of ${pages.toLocaleString()}`;
+    els.pager.hidden = data.total === 0;
+    updatePagerButtons();
+  }
+
+  function updatePagerButtons() {
+    els.prev.disabled = !lastResponse || lastResponse.offset === 0;
+    els.next.disabled = !lastResponse || lastResponse.nextOffset == null;
+  }
+
+  // ---- Events -------------------------------------------------------------
+
+  els.form.addEventListener('submit', (event) => {
+    event.preventDefault();
+    const q = els.q.value.trim();
+    if (!q) return els.q.focus();
+    load({ q, limit: Number(els.limit.value), offset: 0, hasImages: els.hasImages.checked }, 'push');
+  });
+
+  els.prev.addEventListener('click', () => {
+    if (!lastResponse) return;
+    const offset = Math.max(0, lastResponse.offset - currentState.limit);
+    load({ ...currentState, offset }, 'push');
+    els.status.scrollIntoView({ block: 'nearest' });
+  });
+
+  els.next.addEventListener('click', () => {
+    if (lastResponse?.nextOffset == null) return;
+    load({ ...currentState, offset: lastResponse.nextOffset }, 'push');
+    els.status.scrollIntoView({ block: 'nearest' });
+  });
+
+  window.addEventListener('popstate', () => {
+    const state = readStateFromUrl();
+    syncFormToState(state);
+    load(state, 'none');
+  });
+
+  const initial = readStateFromUrl();
+  syncFormToState(initial);
+  load(initial, 'replace');
+</script>
+</body>
+</html>

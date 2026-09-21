@@ -1,0 +1,14 @@
+# Optional Redis for the persistent, shared cache tier.
+#   docker compose up -d redis
+#   REDIS_URL=redis://localhost:6379 pnpm dev
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    # Evict least-recently-used keys when full, and snapshot to disk so the cache survives Redis restarts too.
+    command: ["redis-server", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru", "--save", "60", "1"]
+    volumes:
+      - redis-data:/data
+volumes:
+  redis-data:
