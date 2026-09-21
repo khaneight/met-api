@@ -97,6 +97,40 @@ describe('GET /works/recent', () => {
     expect(res.json().works[0].objectId).toBe(1);
   });
 
+  it('ranks Palaeolithic objects by their dates, not as newest (regression: "humans")', async () => {
+    // Real Met data: stone tools dated "ca. 240,000–40,000 B.C.".
+    const stoneTools: FakeObject[] = Array.from({ length: 15 }, (_, i) => ({
+      objectID: 573_090 + i,
+      objectBeginDate: -240_000,
+      objectEndDate: -40_000,
+    }));
+    const objects = [...generateObjects(300), ...stoneTools];
+    const { met, get } = setup(objects);
+
+    const body = (await get('/works/recent')).json();
+
+    expect(body.works.map((w: { objectId: number }) => w.objectId)).toEqual(expectedTop(objects, 5));
+    expect(met.calls.filter((c) => c.startsWith('/search')).length).toBeLessThan(25);
+  });
+
+  it('ranks objects outside every date window last instead of first', async () => {
+    const unplaceable: FakeObject[] = Array.from({ length: 10 }, (_, i) => ({
+      objectID: 900_000 + i,
+      objectBeginDate: -300_000_000, // beyond even the widened filter bounds
+      objectEndDate: 1990,
+    }));
+    const dated = generateObjects(100);
+    const { get } = setup([...dated, ...unplaceable]);
+
+    const first = (await get('/works/recent')).json();
+    const last = (await get('/works/recent?offset=100&limit=10')).json();
+
+    expect(first.works.map((w: { objectId: number }) => w.objectId)).toEqual(expectedTop(dated, 5));
+    expect(last.works.map((w: { objectId: number }) => w.objectId).sort()).toEqual(
+      unplaceable.map((o) => o.objectID).sort(),
+    );
+  });
+
   it('drops objects that 404 without shifting page boundaries', async () => {
     const objects = generateObjects(500);
     const top = expectedTop(objects, 10);

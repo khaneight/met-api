@@ -131,7 +131,7 @@ sequenceDiagram
   Met-->>Mc: 2,173 IDs
   par topIds(10)
     loop gallop + binary search over years
-      Sv->>Mc: search({q, dateRange: [-100000, year]})
+      Sv->>Mc: search({q, dateRange: [MIN_YEAR, year]})
       Mc->>Met: (cache miss only)
     end
   and topIds(5)
@@ -263,14 +263,23 @@ property.
 
 #### The key identity
 
-Using `MIN_YEAR = -100000` as a lower bound that includes everything:
+With `MIN_YEAR = -100,000,000` and `MAX_YEAR = 100,000,000`, first split the matches:
 
 ```
-newerThan(E) = search(q)  \  search(q, dateBegin=MIN_YEAR, dateEnd=E)
-             = { o : o.objectEndDate > E }
+dated        = search(q, dateBegin=MIN_YEAR, dateEnd=MAX_YEAR)     // placeable by year
+unplaced     = search(q) \ dated                                   // outside the bounds; expected empty
+newerThan(E) = dated  \  search(q, dateBegin=MIN_YEAR, dateEnd=E)
+             = { o ∈ dated : o.objectEndDate > E }
 ```
 
-That's an exact set computed from two search calls, and the first is shared by every probe. Because of
+That's an exact set from one search per probe, plus the universe searches shared by every probe.
+
+**Why `dated` and not all matches.** An object outside the bounds appears in *no* date window, so subtracting
+from all matches would count it as newer than every year. That really happened. The bound was originally
+−100,000, and "humans" matches 15 Palaeolithic tools dated 240,000–40,000 BCE. They were ranked as the newest works,
+and the search wandered upward toward `MAX_YEAR`. Now the bounds are far wider than any real date, and anything
+still outside them is `unplaced`: ranked after every dated work, by ID, and never mistaken for recent. The
+`dated` search runs concurrently with the first year probe, so it costs no extra round trip. Because of
 containment semantics, works whose range spans the boundary (for example 1850–1990 with E = 1983) are handled
 correctly. They fail `endDate <= E`, so they correctly land in `newerThan(E)`.
 
@@ -298,9 +307,10 @@ The search has three phases:
    search over the whole year range would need.
 3. **Binary search** inside the bracket down to adjacent years, another O(log d) probes.
 
-A degenerate case: if the gallop reaches `MIN_YEAR` and there still aren't k works, the remaining matches have no
-usable end date. They're treated as a single tie group ranked by ID, so the function always terminates with a
-valid partition.
+Because every `dated` work ends at or before `MAX_YEAR`, `newerThan(MAX_YEAR) = ∅`. The upward search in step 1 is
+therefore always correctly bracketed. A degenerate case: if the gallop reaches `MIN_YEAR` and there still aren't k
+works, the rest end exactly at `MIN_YEAR`. They're treated as a single tie group ranked by ID, so the function
+always terminates with a valid partition.
 
 Worked example, "bread" with k = 5 (from the live server log):
 

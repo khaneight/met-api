@@ -36,9 +36,13 @@ export interface RecentWorksResult {
   works: Work[];
 }
 
-/** Bounds that include every object the Met catalogues. */
-const MIN_YEAR = -100_000;
-const MAX_YEAR = 100_000;
+/**
+ * Date-filter bounds. They must be wide enough for real data: the Met has
+ * Palaeolithic tools dated 240,000 BCE. Anything still outside them is ranked
+ * last rather than trusted (see `partition`).
+ */
+const MIN_YEAR = -100_000_000;
+const MAX_YEAR = 100_000_000;
 /** Deepest offset a client may request; pages beyond it are not advertised. */
 export const MAX_OFFSET = 10_000;
 /** At or below this many matches it is cheaper to fetch everything than to narrow. */
@@ -54,7 +58,9 @@ const DIRECT_FETCH_THRESHOLD = 20;
  *
  *   search(q, dateBegin=B, dateEnd=E) = { o : o.beginDate >= B && o.endDate <= E }
  *
- * Hence `all \ search(q, MIN_YEAR, E)` is exactly the set with endDate > E.
+ * Hence `dated \ search(q, MIN_YEAR, E)` is exactly the set with endDate > E,
+ * where `dated = search(q, MIN_YEAR, MAX_YEAR)` (every match whose dates lie
+ * inside the filter's bounds).
  * We search for the largest E whose "newer than E" set still has >= N items,
  * costing O(log years) cheap ID-only searches, then fetch only those objects.
  * The final ordering always comes from the fetched objects themselves.
@@ -82,10 +88,17 @@ export class RecentWorksService {
     } else if (offset >= all.length) {
       works = [];
     } else {
+      // The first year probe (up to now) is independent of the partition
+      // search, so run them together; boundary() then finds it in the cache.
+      const [inBounds] = await Promise.all([
+        this.met.search({ ...base, dateRange: { begin: MIN_YEAR, end: MAX_YEAR } }),
+        this.met.search({ ...base, dateRange: { begin: MIN_YEAR, end: this.now().getUTCFullYear() } }),
+      ]);
+      const universe = partition(all, inBounds);
       // The page is exactly the top `end` IDs minus the top `offset` IDs.
       const [upToEnd, beforeOffset] = await Promise.all([
-        this.topIds(base, all, end),
-        this.topIds(base, all, offset),
+        this.topIds(base, universe, end),
+        this.topIds(base, universe, offset),
       ]);
       const pageIds = [...upToEnd].filter((id) => !beforeOffset.has(id));
       // An object listed by search can still 404; it is dropped rather than
@@ -108,11 +121,11 @@ export class RecentWorksService {
    * Within a single end year, rank is decided by objectID (descending), so
    * the boundary year's tie group can be cut without fetching any objects.
    */
-  private async topIds(base: SearchParams, all: number[], k: number): Promise<Set<number>> {
+  private async topIds(base: SearchParams, { dated, unplaced }: Universe, k: number): Promise<Set<number>> {
     if (k <= 0) return new Set();
-    if (k >= all.length) return new Set(all);
+    if (k >= dated.length) return new Set([...dated, ...unplaced.slice(0, k - dated.length)]);
 
-    const { newer, ties } = await this.boundary(base, all, k);
+    const { newer, ties } = await this.boundary(base, dated, k);
     const fromTies = ties.sort((a, b) => b - a).slice(0, k - newer.length);
     return new Set([...newer, ...fromTies]);
   }
@@ -121,15 +134,16 @@ export class RecentWorksService {
    * Finds adjacent years (lo, lo + 1) such that fewer than `k` works end after
    * lo + 1 but at least `k` end after lo. Returns the works ending after lo + 1
    * (`newer`, all of rank < k) and those ending exactly in lo + 1 (`ties`).
+   * Requires k < dated.length.
    */
   private async boundary(
     base: SearchParams,
-    all: number[],
+    dated: number[],
     k: number,
   ): Promise<{ newer: number[]; ties: number[] }> {
     const newerThan = async (year: number): Promise<number[]> => {
       const olderOrEqual = new Set(await this.met.search({ ...base, dateRange: { begin: MIN_YEAR, end: year } }));
-      return all.filter((id) => !olderOrEqual.has(id));
+      return dated.filter((id) => !olderOrEqual.has(id));
     };
 
     // Invariant once bracketed: |newerThan(hi)| < k <= |newerThan(lo)|.
@@ -140,8 +154,9 @@ export class RecentWorksService {
 
     if (hiSet.length >= k) {
       // Enough future-dated objects (cataloguing quirks): search above today.
+      // Nothing in `dated` ends after MAX_YEAR, so the invariant holds there.
       [lo, loSet] = [hi, hiSet];
-      [hi, hiSet] = [MAX_YEAR, await newerThan(MAX_YEAR)];
+      [hi, hiSet] = [MAX_YEAR, []];
     } else {
       // Gallop backwards in time to bracket the boundary...
       let step = 4;
@@ -149,9 +164,9 @@ export class RecentWorksService {
       loSet = await newerThan(lo);
       while (loSet.length < k) {
         if (lo <= MIN_YEAR) {
-          // Whatever remains has no usable end date; rank it by ID.
+          // Whatever remains ends exactly at MIN_YEAR; rank it by ID.
           const newer = new Set(loSet);
-          return { newer: loSet, ties: all.filter((id) => !newer.has(id)) };
+          return { newer: loSet, ties: dated.filter((id) => !newer.has(id)) };
         }
         [hi, hiSet] = [lo, loSet];
         step *= 2;
@@ -176,6 +191,24 @@ export class RecentWorksService {
     const objects = await Promise.all(ids.map((id) => this.met.getObject(id)));
     return objects.filter((o): o is MetObject => o !== null);
   }
+}
+
+interface Universe {
+  dated: number[];
+  unplaced: number[];
+}
+
+/**
+ * Splits matches into `dated` (inside the date filter's bounds, so they can be
+ * placed by year) and `unplaced` (outside them; none are expected, but a set
+ * difference would otherwise count them as newer than every year). Unplaced
+ * works are ranked after all dated ones, by objectID.
+ */
+function partition(all: number[], inBoundsIds: number[]): Universe {
+  const inBounds = new Set(inBoundsIds);
+  const dated = all.filter((id) => inBounds.has(id));
+  const unplaced = all.filter((id) => !inBounds.has(id)).sort((a, b) => b - a);
+  return { dated, unplaced };
 }
 
 function byMostRecent(a: MetObject, b: MetObject): number {

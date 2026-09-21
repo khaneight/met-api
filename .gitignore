@@ -3,3 +3,4 @@ dist
 coverage
 .env
 .redis-data
+.verify-cache

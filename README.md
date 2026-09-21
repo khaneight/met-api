@@ -16,6 +16,7 @@ curl 'localhost:3000/works/recent?offset=5'          # page 2
 
 pnpm test                     # vitest
 pnpm typecheck
+pnpm verify:live bread       # slow live canary: brute-force sort of every match vs the service
 pnpm build && pnpm start      # production build
 ```
 
@@ -113,8 +114,10 @@ server IP-banned.
 search(q, dateBegin=B, dateEnd=E) = { o : o.objectBeginDate >= B  AND  o.objectEndDate <= E }
 ```
 
-It follows that `search(q) \ search(q, dateBegin=-100000, dateEnd=E)` is **exactly** the set of matches with
-`objectEndDate > E`, obtained purely from cheap ID-only searches. `RecentWorksService`
+It follows that `dated \ search(q, dateBegin=MIN, dateEnd=E)` is **exactly** the set of matches with
+`objectEndDate > E`, obtained purely from cheap ID-only searches. Here `dated = search(q, MIN, MAX)` with bounds of
+±100,000,000 years. The Met has tools dated 240,000 BCE, and anything outside the bounds is ranked last rather
+than mistaken for the newest. `RecentWorksService`
 (`src/works/service.ts`) then:
 
 1. Gallops backwards from the current year (steps of 4, 8, 16, … years) to bracket the boundary. It then
